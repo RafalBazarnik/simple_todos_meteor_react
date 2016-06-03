@@ -1,34 +1,39 @@
 import React, { Component, PropTypes } from 'react';
+import { Meteor } from 'meteor/meteor';
 
 export default class Task extends Component {
+
   toggleChecked() {
-    Tasks.update(this.props.task._id, {
-      $set: { checked: !this.props.task.checked },
-    });
+    Meteor.call('tasks.setChecked', this.props.task._id, !this.props.task.checked);
+    // Tasks.update(this.props.task._id, {
+    //   $set: { checked: !this.props.task.checked },
+    // });
   }
 
   deleteThisTask() {
-    Tasks.remove(this.props.task._id);
+    Meteor.call('tasks.remove', this.props.task._id);
+    // Tasks.remove(this.props.task._id);
   }
 
   render() {
 
     const taskClassName = this.props.task.checked ? 'checked' : '';
     return (
-      <li className={taskClassName}>
-        <button className="delete" onClick={this.deleteThisTask.bind(this)}>
-          &times;
-        </button>
-
-        <input
+      <div class="row">
+      <li className="{taskClassName} card-panel cyan accent-1">
+      <input
           type="checkbox"
           readOnly
           checked={this.props.task.checked}
           onClick={this.toggleChecked.bind(this)}
         />
 
-        <span className="text">{this.props.task.text}</span>
-      </li>
+      <span className="text blue-text text-darken-2"><strong>({this.props.task.username}): </strong>{this.props.task.text}</span>
+      <button className="delete right" onClick={this.deleteThisTask.bind(this)}>
+          &times;
+      </button>
+    </li>
+    </div>
     );
   }
 };

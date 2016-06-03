@@ -1,12 +1,55 @@
 import React, { Component, PropTypes } from 'react';
 import ReactDOM from 'react-dom';
 import { Meteor } from 'meteor/meteor';
+import { check } from 'meteor/check';
 import { createContainer } from 'meteor/react-meteor-data';
 
 // import { Tasks } from '../api/tasks.js';
 import Task from './Task.jsx';
+import AccountsUIWrapper from './Accounts/AccountsUIWrapper.jsx';
 
 Tasks = new Mongo.Collection('tasks');
+
+if(Meteor.isServer){
+  Meteor.publish('tasks', function taskPublication() {
+    return Tasks.find();
+  });
+}
+
+Meteor.methods({
+  'tasks.insert'(text) {
+    check(text, String);
+
+    if (! this.userId) {
+      throw new Meteor.Error('not-authorized');
+    }
+
+    Tasks.insert({
+      text,
+      createdAt: new Date(),
+      owner: this.userId,
+      username: Meteor.users.findOne(this.userId).username,
+    });
+  },
+  'tasks.remove'(taskId) {
+    check(taskId, String);
+    // console.log(taskId);
+    // console.log(this.userId);
+    // console.log(Tasks.findOne({_id: taskId}).owner);
+    if (this.userId === Tasks.findOne({_id: taskId}).owner) {
+      Tasks.remove(taskId);
+    }
+    else {
+      // throw new Meteor.Error('not-authorized');
+      Materialize.toast("It's not your task!", 2000);
+    }
+  },
+  'tasks.setChecked'(taskId, setChecked) {
+    check(taskId, String);
+    check(setChecked, Boolean);
+    Tasks.update(taskId, { $set: { checked: setChecked } });
+  },
+});
 
 class App extends Component {
 
@@ -30,10 +73,7 @@ class App extends Component {
 
     const text = ReactDOM.findDOMNode(this.refs.textInput).value.trim();
 
-    Tasks.insert({
-      text,
-      createdAt: new Date(),
-    });
+    Meteor.call("tasks.insert", text);
 
     ReactDOM.findDOMNode(this.refs.textInput).value = '';
   }
@@ -50,25 +90,28 @@ class App extends Component {
     return (
       <div className="container">
         <header>
-          <h1>Todo List - pozostało do zrobienia {this.props.incompleteCount}</h1>
+          <h1 className="center-align">Todo List -<br /> tasks left to do: <strong>{this.props.incompleteCount}</strong></h1>
 
-            <label className="hide-completed">
+            <label className="hide-completed left">
               <input
                 type="checkbox"
                 readOnly
                 checked={this.state.hideCompleted}
                 onClick={this.toggleHideCompleted.bind(this)}
                 />
-                Hide Completed Tasks
+              <span>Hide Completed Tasks</span>
             </label>
 
-          <form className="new-task" onSubmit={this.handleSubmit.bind(this)} >
+          <AccountsUIWrapper />
+          { this.props.currentUser ?
+          <form className="new-task card-panel teal lighten-2" onSubmit={this.handleSubmit.bind(this)} >
               <input
                 type="text"
                 ref="textInput"
                 placeholder="Type to add new tasks"
               />
-          </form>
+          </form> : ''
+        }
         </header>
         <ul>
           {this.renderTasks()}
@@ -81,11 +124,14 @@ class App extends Component {
 App.propTypes = {
   tasks: PropTypes.array.isRequired,
   incompleteCount: PropTypes.number.isRequired,
+  currentUser: PropTypes.object,
 }
 
 export default createContainer(() => {
+  Meteor.subscribe('tasks');
   return {
-    tasks: Tasks.find({}, { sort: {createdAt: -1} }).fetch(),
-    incompleteCount: Tasks.find({ checked: { $ne: true} }).count(), //$ne - not equal != $eq
+    tasks: Tasks.find({}, { sort: { createdAt: -1 } }).fetch(),
+    incompleteCount: Tasks.find({ checked: { $ne: true } }).count(),
+    currentUser: Meteor.user(),
   };
 }, App);
